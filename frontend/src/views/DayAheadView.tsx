@@ -4,7 +4,7 @@ import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip,
 
 import { useDayAhead } from "../api/queries";
 import type { Meta } from "../api/types";
-import { axisProps, tooltipContent, type TooltipRow } from "../components/chart";
+import { axisProps, endLabel, tooltipContent, type TooltipRow } from "../components/chart";
 import { DecisionTimeline } from "../components/DecisionTimeline";
 import { ErrorState, LoadingPage, PageHeader, Panel, SeriesToggle, Stat, StatGroup } from "../components/ui";
 import { type DayChartRow, dayAheadCsv, gwLabel, mergeDayAhead, niceTicks } from "../lib/chartData";
@@ -34,6 +34,17 @@ export function DayAheadView({ meta, gate, gateLabel, date, onDateChange }: Prop
     () => rows.filter((r) => fmtTime(r.t).endsWith(":00") && Number(fmtTime(r.t).slice(0, 2)) % 3 === 0).map((r) => r.t),
     [rows],
   );
+  // Direct end labels: forecast and actual names at the right edge, placed apart from each other.
+  const ends = useMemo(() => {
+    const lastIdx = (key: "forecast" | "actual") => rows.reduce((last, r, i) => (r[key] != null ? i : last), -1);
+    const fIdx = lastIdx("forecast");
+    const aIdx = lastIdx("actual");
+    const fVal = rows[fIdx]?.forecast ?? 0;
+    const aVal = rows[aIdx]?.actual ?? 0;
+    return { fIdx, aIdx, forecastAbove: fVal >= aVal };
+  }, [rows]);
+  const fmtGW1 = (v: number) => `${fmtNumber(v / 1000, 1)} GW`;
+
   const yTicks = useMemo(
     () => niceTicks(Math.max(0, ...rows.flatMap((r) => [r.actual ?? 0, r.forecast ?? 0, r.band?.[1] ?? 0, r.adjusted ?? 0]))),
     [rows],
@@ -168,7 +179,7 @@ export function DayAheadView({ meta, gate, gateLabel, date, onDateChange }: Prop
           >
             <div className={`chart chart-lg ${isFetching ? "is-busy" : ""}`}>
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+                <ComposedChart data={rows} margin={{ top: 12, right: 76, bottom: 0, left: 0 }}>
                   <CartesianGrid stroke={theme.grid} vertical={false} />
                   <XAxis
                     dataKey="t"
@@ -183,11 +194,22 @@ export function DayAheadView({ meta, gate, gateLabel, date, onDateChange }: Prop
                   <YAxis ticks={yTicks} domain={[0, yTicks[yTicks.length - 1] ?? "auto"]} tickFormatter={gwLabel} {...axisProps(theme)} width={56} />
                   <Tooltip content={renderTooltip} cursor={{ stroke: theme.cursor, strokeWidth: 1 }} />
                   {series.band && (
-                    <Area dataKey="band" stroke="none" fill={theme.band} fillOpacity={theme.bandOpacity} connectNulls isAnimationActive={false} />
+                    <Area type="monotone" dataKey="band" stroke="none" fill={theme.band} fillOpacity={theme.bandOpacity} connectNulls isAnimationActive={false} />
                   )}
-                  <Line dataKey="forecast" stroke={theme.forecast} strokeWidth={2.25} dot={false} connectNulls isAnimationActive={false} />
+                  <Line
+                    type="monotone"
+                    dataKey="forecast"
+                    stroke={theme.forecast}
+                    strokeWidth={2.5}
+                    dot={false}
+                    activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--surface)" }}
+                    connectNulls
+                    isAnimationActive={false}
+                    label={endLabel({ lastIndex: ends.fIdx, name: "Forecast", color: theme.forecast, above: ends.forecastAbove, format: fmtGW1 })}
+                  />
                   {series.adjusted && (
                     <Line
+                      type="monotone"
                       dataKey="adjusted"
                       stroke={theme.adjusted}
                       strokeWidth={2}
@@ -198,7 +220,17 @@ export function DayAheadView({ meta, gate, gateLabel, date, onDateChange }: Prop
                     />
                   )}
                   {series.actual && (
-                    <Line dataKey="actual" stroke={theme.actual} strokeWidth={1.75} dot={false} connectNulls isAnimationActive={false} />
+                    <Line
+                      type="monotone"
+                      dataKey="actual"
+                      stroke={theme.actual}
+                      strokeWidth={1.75}
+                      dot={false}
+                      activeDot={{ r: 3.5, strokeWidth: 2, stroke: "var(--surface)" }}
+                      connectNulls
+                      isAnimationActive={false}
+                      label={endLabel({ lastIndex: ends.aIdx, name: "Actual", color: theme.actual, above: !ends.forecastAbove, format: fmtGW1 })}
+                    />
                   )}
                 </ComposedChart>
               </ResponsiveContainer>

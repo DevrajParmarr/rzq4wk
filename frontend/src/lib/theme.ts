@@ -47,6 +47,7 @@ const light = {
   decision: "#1f5fbf",
   decisionOpacity: 0.06,
   cursor: "#cdd1d6",
+  barNeutral: "#c9ced5",
 };
 
 const dark: typeof light = {
@@ -62,6 +63,7 @@ const dark: typeof light = {
   decision: "#6ea3f0",
   decisionOpacity: 0.08,
   cursor: "#343b45",
+  barNeutral: "#3a424d",
 };
 
 export type ChartTheme = typeof light;

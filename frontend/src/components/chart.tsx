@@ -52,3 +52,38 @@ export function axisProps(theme: ChartTheme) {
 }
 
 export const CHART_MARGIN = { top: 8, right: 8, bottom: 0, left: 0 };
+
+/**
+ * Direct label drawn just past the last point of a line (name + value), so readers don't
+ * have to look across to a legend. `above` places it above or below the point to keep two
+ * neighbouring labels apart.
+ */
+export function endLabel({
+  lastIndex,
+  name,
+  color,
+  above,
+  format,
+}: {
+  lastIndex: number;
+  name: string;
+  color: string;
+  above: boolean;
+  format: (v: number) => string;
+}) {
+  return function EndLabel(props: unknown) {
+    const { x, y, index, value } = props as { x?: number; y?: number; index?: number; value?: number | null };
+    if (index !== lastIndex || x == null || y == null || value == null) return <g />;
+    const nameY = above ? y - 20 : y + 16;
+    return (
+      <g className="end-label">
+        <text x={x + 8} y={nameY} fill={color} fontSize={11.5} fontWeight={600}>
+          {name}
+        </text>
+        <text x={x + 8} y={nameY + 14} fill={color} fontSize={11.5} opacity={0.8}>
+          {format(value)}
+        </text>
+      </g>
+    );
+  };
+}

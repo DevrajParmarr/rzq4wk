@@ -146,8 +146,8 @@ export function ExplorerView({ meta }: { meta: Meta }) {
                   />
                   <YAxis ticks={yTicks} domain={[0, yTicks[yTicks.length - 1] ?? "auto"]} tickFormatter={gwLabel} {...axisProps(theme)} width={56} />
                   <Tooltip content={renderTooltip} cursor={{ stroke: theme.cursor }} />
-                  <Line dataKey="actual" stroke={theme.actual} strokeWidth={1.5} dot={false} connectNulls isAnimationActive={false} />
-                  <Line dataKey="forecast" stroke={theme.forecast} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
+                  <Line type="monotone" dataKey="actual" stroke={theme.actual} strokeWidth={1.5} dot={false} connectNulls isAnimationActive={false} />
+                  <Line type="monotone" dataKey="forecast" stroke={theme.forecast} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

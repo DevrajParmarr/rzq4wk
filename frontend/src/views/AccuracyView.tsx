@@ -81,19 +81,23 @@ export function AccuracyView({ gate, gateLabel, onOpenDay }: Props) {
 
       <Panel
         title="Daily wind energy"
-        description="Select a day to open it"
+        description="Bar: actual wind. Marker: forecast at the deadline. The connector is the error. Select a day to open it."
         actions={
           <div className="legend">
-            <LegendItem color={theme.forecast} label="Forecast" variant="area" />
-            <LegendItem color={theme.actual} label="Actual" variant="area" />
+            <LegendItem color={theme.barNeutral} label="Actual" variant="area" />
+            <LegendItem color={theme.forecast} label="Forecast" />
+            <LegendItem color={theme.over} label="Forecast too high" />
+            <LegendItem color={theme.under} label="Too low" />
           </div>
         }
       >
         <div className="chart">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={daily} margin={CHART_MARGIN} barGap={1} barCategoryGap="22%">
+            <ComposedChart data={daily} margin={CHART_MARGIN}>
               <CartesianGrid stroke={theme.grid} vertical={false} />
-              <XAxis dataKey="delivery_date" tickFormatter={(d: string) => fmtShortDate(d)} {...axisProps(theme)} interval={2} dy={6} />
+              <XAxis xAxisId="actual" dataKey="delivery_date" tickFormatter={(d: string) => fmtShortDate(d)} {...axisProps(theme)} interval={2} dy={6} />
+              {/* Hidden twin axis so the forecast marker sits exactly over its day's bar. */}
+              <XAxis xAxisId="forecast" dataKey="delivery_date" hide />
               <YAxis {...axisProps(theme)} width={70} tickFormatter={(v: number) => `${v} GWh`} />
               <Tooltip
                 cursor={{ fill: theme.grid }}
@@ -101,14 +105,31 @@ export function AccuracyView({ gate, gateLabel, onOpenDay }: Props) {
                   title: fmtShortDate(d.delivery_date),
                   rows: [
                     { label: "Forecast", value: fmtGWh(d.forecast_mwh), color: theme.forecast },
-                    { label: "Actual", value: fmtGWh(d.actual_mwh), color: theme.actual },
+                    { label: "Actual", value: fmtGWh(d.actual_mwh), color: theme.barNeutral },
                     { label: "Forecast vs actual", value: signedPct(pctChange(d.actual_mwh, d.forecast_mwh)), emphasis: true },
                   ],
                 }))}
               />
-              <Bar dataKey="forecast_gwh" fill={theme.forecast} radius={[2, 2, 0, 0]} isAnimationActive={false} cursor="pointer" onClick={openFromBar} />
-              <Bar dataKey="actual_gwh" fill={theme.actual} radius={[2, 2, 0, 0]} isAnimationActive={false} cursor="pointer" onClick={openFromBar} />
-            </BarChart>
+              <Bar
+                xAxisId="actual"
+                dataKey="actual_gwh"
+                fill={theme.barNeutral}
+                radius={[2, 2, 0, 0]}
+                maxBarSize={22}
+                isAnimationActive={false}
+                cursor="pointer"
+                onClick={openFromBar}
+              />
+              <Bar
+                xAxisId="forecast"
+                dataKey="forecast_gwh"
+                maxBarSize={22}
+                isAnimationActive={false}
+                cursor="pointer"
+                onClick={openFromBar}
+                shape={(props: unknown) => <ForecastMarker {...(props as MarkerProps)} theme={theme} />}
+              />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </Panel>
@@ -198,7 +219,14 @@ function LeadTimeChart({ data, theme }: { data: Accuracy; theme: ChartTheme }) {
       <ComposedChart data={data.by_horizon} margin={CHART_MARGIN}>
         <CartesianGrid stroke={theme.grid} vertical={false} />
         {leadMin != null && leadMax != null && (
-          <ReferenceArea x1={Math.max(0, leadMin)} x2={Math.min(48, leadMax)} fill={theme.decision} fillOpacity={theme.decisionOpacity} stroke="none" />
+          <ReferenceArea
+            x1={Math.max(0, leadMin)}
+            x2={Math.min(48, leadMax)}
+            fill={theme.decision}
+            fillOpacity={theme.decisionOpacity}
+            stroke="none"
+            label={{ value: "Decision window", position: "insideTop", fill: theme.axis, fontSize: 11, dy: 4 }}
+          />
         )}
         <XAxis
           dataKey="horizon_h"
@@ -220,8 +248,8 @@ function LeadTimeChart({ data, theme }: { data: Accuracy; theme: ChartTheme }) {
             ],
           }))}
         />
-        <Line dataKey="mae" stroke={theme.forecast} strokeWidth={2.25} dot={false} isAnimationActive={false} />
-        <Line dataKey="bias" stroke={theme.over} strokeWidth={1.75} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
+        <Line type="monotone" dataKey="mae" stroke={theme.forecast} strokeWidth={2.25} dot={false} isAnimationActive={false} />
+        <Line type="monotone" dataKey="bias" stroke={theme.over} strokeWidth={1.75} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -393,5 +421,37 @@ function Scorecard({ data, onOpenDay }: { data: Accuracy; onOpenDay: (date: stri
         </tbody>
       </table>
     </div>
+  );
+}
+
+// --------------------------------------------------------------------------- daily energy marker
+
+interface MarkerProps {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  payload?: { forecast_gwh: number | null; actual_gwh: number | null };
+}
+
+/**
+ * Forecast drawn as a horizontal tick over the actual-energy bar, joined to the bar top by a
+ * connector coloured by error direction. Bars share a zero baseline, so the actual's pixel
+ * height follows from the forecast bar's geometry.
+ */
+function ForecastMarker({ x = 0, y = 0, width = 0, height = 0, payload, theme }: MarkerProps & { theme: ChartTheme }) {
+  const forecast = payload?.forecast_gwh;
+  const actual = payload?.actual_gwh;
+  if (forecast == null || forecast <= 0) return <g />;
+  const baseline = y + height;
+  const actualY = actual != null ? baseline - height * (actual / forecast) : y;
+  const cx = x + width / 2;
+  return (
+    <g>
+      {actual != null && (
+        <line x1={cx} x2={cx} y1={y} y2={actualY} stroke={forecast >= actual ? theme.over : theme.under} strokeWidth={2} />
+      )}
+      <line x1={x - 2} x2={x + width + 2} y1={y} y2={y} stroke={theme.forecast} strokeWidth={3} strokeLinecap="round" />
+    </g>
   );
 }

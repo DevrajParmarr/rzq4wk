@@ -32,6 +32,12 @@ export const fmtDay = (iso: string | number) => dayFmt.format(new Date(iso));
 export const fmtLongDate = (isoDate: string) => longDayFmt.format(new Date(`${isoDate}T00:00:00Z`));
 export const fmtShortDate = (isoDate: string) => shortDateFmt.format(new Date(`${isoDate}T00:00:00Z`));
 
+/** Locale-grouped number with fixed decimals, e.g. 12,345.6 */
+export function fmtNumber(v: number | null | undefined, digits = 0): string {
+  if (isMissing(v)) return "–";
+  return v.toLocaleString("en-GB", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
 export function fmtMW(v: number | null | undefined, signed = false): string {
   if (isMissing(v)) return "–";
   const rounded = Math.round(v);

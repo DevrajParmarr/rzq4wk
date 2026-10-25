@@ -308,6 +308,7 @@ class WindAnalytics:
             "gate": gate,
             "decision_cutoff": decision_cutoff(delivery_date, parse_gate(gate), self.tz),
             "forecast_publish_time": publishes.max() if len(publishes) else None,
+            "decision_day_publishes": self._publishes_on(delivery_date - timedelta(days=1)),
             "lead_time_range_h": [_opt(day["lead_h"].min()), _opt(day["lead_h"].max())],
             "band_quantiles": {"error_p10": quantiles[0], "error_p90": quantiles[1]} if quantiles else None,
             "summary": summary,
@@ -316,6 +317,12 @@ class WindAnalytics:
             ],
             "actual_points": actual_day[["start_time", "actual"]],
         }
+
+    def _publishes_on(self, day: date) -> list[pd.Timestamp]:
+        """All WINDFOR publish times during a UK local day (for the decision timeline)."""
+        start, end = delivery_window(day, self.tz)
+        times = self.data.forecasts["publish_time"]
+        return sorted(times[(times >= start) & (times < end)].unique())
 
     def accuracy(self, gate: str) -> dict:
         frame = self.decision_frame(gate)

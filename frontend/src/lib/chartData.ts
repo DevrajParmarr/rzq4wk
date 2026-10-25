@@ -53,6 +53,25 @@ export function mergeSeries(
   return [...rows.values()].sort((a, b) => a.t - b.t);
 }
 
+/**
+ * Evenly spaced axis ticks from zero with a "nice" step (e.g. 0, 5, 10, 15, 20 GW), so every
+ * label is exact. Values are in MW.
+ */
+export function niceTicks(maxValue: number, maxIntervals = 5): number[] {
+  if (!Number.isFinite(maxValue) || maxValue <= 0) return [0];
+  const steps = [250, 500, 1000, 2000, 2500, 5000, 10000, 20000];
+  // Smallest step that needs no more than `maxIntervals` gaps: keeps headroom tight.
+  const step = steps.find((s) => Math.ceil(maxValue / s) <= maxIntervals) ?? steps[steps.length - 1]!;
+  const top = Math.ceil(maxValue / step) * step;
+  return Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i * step);
+}
+
+/** MW tick value as a GW label with only the decimals it needs: 2500 -> "2.5 GW". */
+export function gwLabel(mw: number): string {
+  const gw = mw / 1000;
+  return `${Number.isInteger(gw) ? gw : Number(gw.toFixed(2))} GW`;
+}
+
 /** Drop empty bins at either end of a histogram (keeps interior gaps). */
 export function trimEmptyBins<T extends { count: number }>(bins: T[]): T[] {
   const first = bins.findIndex((b) => b.count > 0);

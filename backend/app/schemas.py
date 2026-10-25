@@ -87,6 +87,7 @@ class DayAheadResponse(BaseModel):
     gate: str
     decision_cutoff: datetime
     forecast_publish_time: datetime | None = Field(description="Publish time of the latest forecast used")
+    decision_day_publishes: list[datetime] = Field(description="Every forecast publish time on the decision day D-1")
     lead_time_range_h: list[float | None]
     band_quantiles: BandQuantiles | None
     summary: DaySummary

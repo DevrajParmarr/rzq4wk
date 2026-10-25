@@ -1,96 +1,96 @@
 import type { Meta } from "../api/types";
-import { Panel } from "../components/ui";
-import { fmtDayTime, fmtLongDate } from "../lib/format";
+import { PageHeader } from "../components/ui";
+import { fmtDayTime, fmtLongDate, fmtNumber } from "../lib/format";
 
 export function MethodView({ meta }: { meta: Meta }) {
   const c = meta.coverage;
   return (
-    <div className="view method">
-      <div className="grid-2">
-        <Panel title="The decision this tool supports">
-          <ul className="prose">
-            <li>
-              Day-ahead power for delivery day <strong>D</strong> is bought at an auction on <strong>D−1</strong>. EPEX SPOT's GB
-              hourly auction closes at <strong>09:20</strong> UK time, and Nord Pool's N2EX GB auction closes at{" "}
-              <strong>09:50</strong>.
-            </li>
-            <li>
-              The volume to buy is roughly demand minus the expected wind output. Any wind shortfall must be covered later in
-              intraday trading or the imbalance market.
-            </li>
-            <li>
-              The forecast that matters is therefore the <strong>latest one published before the deadline</strong>, not the
-              most accurate one ever published.
-            </li>
-          </ul>
-        </Panel>
+    <div className="view">
+      <PageHeader
+        eyebrow="Reference"
+        title="Methodology"
+        description="How forecasts are selected and scored, which data is used, and the limits of this pilot."
+      />
 
-        <Panel title="How a forecast is selected">
-          <ul className="prose">
-            <li>
-              Elexon publishes a WINDFOR forecast curve about 8 times a day: 02:30, 04:30, 07:30, 09:30, 11:30, 15:30, 18:30
-              and 22:30 UK time.
-            </li>
-            <li>
-              For every hour of D, the tool takes the most recent forecast for that hour with a publish time at or before the
-              deadline on D−1. This is an as-of join, so there is no look-ahead.
-            </li>
-            <li>
-              At 09:20 this is the 07:30 publish. The 09:30 publish arrives 10 minutes too late, but it does reach N2EX
-              bidders before 09:50.
-            </li>
-            <li>Lead time from the deadline to delivery is about 15 to 39 hours.</li>
-          </ul>
-        </Panel>
+      <article className="doc">
+        <section>
+          <h2>The decision being supported</h2>
+          <p>
+            Power for delivery day D is bought at auction on the previous day, D−1. The EPEX SPOT GB hourly auction closes at 09:20
+            UK time, and the Nord Pool N2EX GB auction closes at 09:50. The volume to buy is broadly demand minus expected wind, and
+            any wind shortfall must later be covered in intraday trading or the imbalance market.
+          </p>
+          <p>
+            The forecast that matters is therefore the latest one published before the deadline, not the most accurate forecast
+            published afterwards.
+          </p>
+        </section>
 
-        <Panel title="Accuracy measures">
-          <ul className="prose">
-            <li>
-              <strong>Error</strong> is forecast minus actual, in MW, on the hourly timestamps where both datasets have a
-              value. A positive error means wind came in below plan, leaving the buyer short.
-            </li>
-            <li>
-              <strong>MAE</strong> is the typical size of a miss. <strong>RMSE</strong> penalises large misses.{" "}
-              <strong>Bias</strong> is the systematic offset. <strong>P90 absolute error</strong> is a practical sizing
-              figure: 9 in 10 hours fall within it.
-            </li>
-            <li>
-              <strong>80% range:</strong> the empirical P10 and P90 of errors on the other delivery days, applied to the
-              day's forecast. Coverage is checked out of sample, one day at a time.
-            </li>
-            <li>
-              <strong>Adjusted forecast (beta):</strong> the forecast multiplied by the actual-to-forecast energy ratio of
-              the 7 most recent delivery days that were fully settled at the deadline (D−8 to D−2).
-            </li>
-          </ul>
-        </Panel>
+        <section>
+          <h2>Selecting the forecast</h2>
+          <p>
+            Elexon publishes a WINDFOR forecast curve about eight times a day, at roughly 02:30, 04:30, 07:30, 09:30, 11:30, 15:30,
+            18:30 and 22:30 UK time. For each hour of D the tool takes the most recent forecast for that hour published at or before
+            the deadline on D−1. Nothing published after the deadline is ever used.
+          </p>
+          <p>
+            At a 09:20 deadline this is the 07:30 publish. The 09:30 publish misses the EPEX auction but reaches N2EX bidders in time.
+            The lead time from publish to delivery is about 15 to 39 hours.
+          </p>
+        </section>
 
-        <Panel title="Data and limitations">
-          <ul className="prose">
+        <section>
+          <h2>Measuring accuracy</h2>
+          <dl className="definitions">
+            <dt>Error</dt>
+            <dd>
+              Forecast minus outturn, in MW, on the hourly timestamps both datasets share. A positive error means wind came in below
+              plan, leaving the buyer short.
+            </dd>
+            <dt>MAE and RMSE</dt>
+            <dd>The typical size of an hourly miss, and a version that weights large misses more heavily.</dd>
+            <dt>Bias</dt>
+            <dd>The average error. A persistent non-zero bias is a correctable, systematic offset.</dd>
+            <dt>P90 absolute error</dt>
+            <dd>The error that nine hours in ten stay within. A practical figure for sizing a safety margin.</dd>
+            <dt>80% likely range</dt>
+            <dd>
+              The 10th and 90th percentiles of errors on the other delivery days, applied to the day's forecast. Coverage is checked
+              out of sample, one day at a time.
+            </dd>
+            <dt>Adjusted forecast</dt>
+            <dd>
+              The forecast multiplied by the ratio of outturn to forecast energy over the seven most recent delivery days that were
+              fully settled at the deadline, D−8 to D−2. Experimental.
+            </dd>
+          </dl>
+        </section>
+
+        <section>
+          <h2>Data and limitations</h2>
+          <ul>
             <li>
-              Actuals come from Elexon FUELHH, fuel type WIND, half-hourly. Forecasts come from Elexon WINDFOR, hourly. Both
-              are national level and in MW.
+              Outturn comes from Elexon FUELHH, fuel type WIND, at half-hourly resolution. Forecasts come from Elexon WINDFOR at hourly
+              resolution. Both are national figures in MW.
             </li>
             <li>
-              The snapshot holds {c.actual_rows.toLocaleString("en-GB")} actual half-hours and{" "}
-              {c.forecast_rows.toLocaleString("en-GB")} forecast rows from {c.forecast_publishes} publishes. Publishes run
-              from {fmtDayTime(c.first_publish)} to {fmtDayTime(c.last_publish)}.
+              The snapshot holds {fmtNumber(c.actual_rows)} half-hours of outturn and {fmtNumber(c.forecast_rows)} forecast values from{" "}
+              {c.forecast_publishes} publishes, from {fmtDayTime(c.first_publish)} to {fmtDayTime(c.last_publish)}.
             </li>
             <li>
-              Scope covers decisions made from {fmtLongDate(meta.decision_start)} to {fmtLongDate(meta.decision_end)}, so
-              delivery runs to the following day.
+              Scope covers purchase decisions made from {fmtLongDate(meta.decision_start)} to {fmtLongDate(meta.decision_end)}.
             </li>
             <li>
-              Metered outturn excludes wind curtailed for grid constraints, while the forecast does not. This is a likely
-              cause of the persistent positive bias, and the adjusted forecast corrects for it from recent history.
+              Metered outturn excludes wind curtailed for grid constraints, while the forecast does not. This is a likely cause of the
+              persistent positive bias.
             </li>
             <li>
-              The 80% range is calibrated within the January pilot, so some information comes from other January days. A
-              production version would calibrate on a rolling window of past data only.
+              The 80% range is calibrated within the January pilot, so it draws on other January days. A production version would
+              calibrate on a rolling window of past data only.
             </li>
           </ul>
-        </Panel>
-      </div>
+        </section>
+      </article>
     </div>
   );
 }

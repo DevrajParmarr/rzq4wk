@@ -60,6 +60,7 @@ export interface DayAhead {
   gate: string;
   decision_cutoff: string;
   forecast_publish_time: string | null;
+  decision_day_publishes: string[];
   lead_time_range_h: [number | null, number | null];
   band_quantiles: { error_p10: number; error_p90: number } | null;
   summary: {

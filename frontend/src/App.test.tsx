@@ -45,8 +45,8 @@ describe("App", () => {
       vi.fn(async () => new Response(JSON.stringify(meta), { status: 200, headers: { "Content-Type": "application/json" } })),
     );
     renderApp();
-    expect(await screen.findByText("The decision this tool supports")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Method & data" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByText("The decision being supported")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Methodology" })).toHaveAttribute("aria-current", "page");
   });
 
   it("surfaces API errors with a retry action", async () => {

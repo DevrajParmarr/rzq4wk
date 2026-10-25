@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ForecastPoint } from "../api/types";
-import { dayAheadCsv, mergeDayAhead, mergeSeries, trimEmptyBins } from "./chartData";
+import { dayAheadCsv, gwLabel, mergeDayAhead, mergeSeries, niceTicks, trimEmptyBins } from "./chartData";
 import { addDays, fmtGW, fmtGWh, fmtMW, fmtTime, pctChange } from "./format";
 
 const fp = (time: string, forecast: number, low: number | null = forecast - 100, high: number | null = forecast + 100): ForecastPoint => ({
@@ -81,5 +81,20 @@ describe("format helpers", () => {
     expect(pctChange(2000, 1400)).toBeCloseTo(-30);
     expect(pctChange(0, 5)).toBeNull();
     expect(addDays("2026-01-31", 1)).toBe("2026-02-01");
+  });
+});
+
+describe("axis ticks", () => {
+  it("uses an exact, evenly spaced step that covers the maximum", () => {
+    expect(niceTicks(17_805)).toEqual([0, 5000, 10000, 15000, 20000]);
+    expect(niceTicks(2_301, 4)).toEqual([0, 1000, 2000, 3000]);
+    expect(niceTicks(20_300)).toEqual([0, 5000, 10000, 15000, 20000, 25000]);
+    expect(niceTicks(0)).toEqual([0]);
+  });
+
+  it("labels ticks in GW without false precision", () => {
+    expect(gwLabel(15000)).toBe("15 GW");
+    expect(gwLabel(2500)).toBe("2.5 GW");
+    expect(gwLabel(-1250)).toBe("-1.25 GW");
   });
 });

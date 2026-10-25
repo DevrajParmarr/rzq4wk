@@ -1,12 +1,15 @@
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { useDayAhead } from "../api/queries";
 import type { Meta } from "../api/types";
-import { ErrorBox, Kpi, LegendDot, Loading, Panel, Toggle } from "../components/ui";
-import { type DayChartRow, dayAheadCsv, mergeDayAhead } from "../lib/chartData";
-import { fmtDayTime, fmtGW, fmtGWh, fmtHours, fmtLongDate, fmtMW, fmtPct, fmtShortDate, fmtTime } from "../lib/format";
-import { type ChartTheme, useChartTheme } from "../lib/theme";
+import { axisProps, tooltipContent, type TooltipRow } from "../components/chart";
+import { DecisionTimeline } from "../components/DecisionTimeline";
+import { ErrorState, LoadingPage, PageHeader, Panel, SeriesToggle, Stat, StatGroup } from "../components/ui";
+import { type DayChartRow, dayAheadCsv, gwLabel, mergeDayAhead, niceTicks } from "../lib/chartData";
+import { fmtDayTime, fmtLongDate, fmtMW, fmtNumber, fmtTime } from "../lib/format";
+import { useChartTheme } from "../lib/theme";
 
 interface Props {
   meta: Meta;
@@ -16,24 +19,45 @@ interface Props {
   onDateChange: (date: string) => void;
 }
 
+const gwh = (mwh: number | null | undefined) => (mwh == null ? "–" : fmtNumber(mwh / 1000, 1));
+
 export function DayAheadView({ meta, gate, gateLabel, date, onDateChange }: Props) {
   const theme = useChartTheme();
-  const [showActual, setShowActual] = useState(true);
-  const [showAdjusted, setShowAdjusted] = useState(false);
+  const [series, setSeries] = useState({ band: true, adjusted: false, actual: true });
+  const toggle = (key: keyof typeof series) => setSeries((s) => ({ ...s, [key]: !s[key] }));
   const { data, error, isPending, isFetching, refetch } = useDayAhead(date, gate);
 
   const dates = meta.delivery_dates;
   const idx = dates.indexOf(date);
   const rows = useMemo(() => (data ? mergeDayAhead(data.forecast_points, data.actual_points) : []), [data]);
-  const ticks = useMemo(() => rows.filter((r) => new Date(r.t).getUTCMinutes() === 0).map((r) => r.t).filter((_, i) => i % 3 === 0), [rows]);
+  const ticks = useMemo(
+    () => rows.filter((r) => fmtTime(r.t).endsWith(":00") && Number(fmtTime(r.t).slice(0, 2)) % 3 === 0).map((r) => r.t),
+    [rows],
+  );
 
-  const s = data?.summary;
-  const dayError = s?.forecast_mwh != null && s.actual_mwh ? ((s.forecast_mwh - s.actual_mwh) / s.actual_mwh) * 100 : null;
+  const yTicks = useMemo(
+    () => niceTicks(Math.max(0, ...rows.flatMap((r) => [r.actual ?? 0, r.forecast ?? 0, r.band?.[1] ?? 0, r.adjusted ?? 0]))),
+    [rows],
+  );
+
+  const renderTooltip = useMemo(
+    () =>
+      tooltipContent<DayChartRow>((row, label) => {
+        const out: TooltipRow[] = [];
+        if (row.forecast != null) out.push({ label: "Forecast", value: fmtMW(row.forecast), color: theme.forecast });
+        if (series.band && row.band) out.push({ label: "80% range", value: `${fmtNumber(row.band[0])} – ${fmtMW(row.band[1])}` });
+        if (series.adjusted && row.adjusted != null) out.push({ label: "Adjusted", value: fmtMW(row.adjusted), color: theme.adjusted });
+        if (series.actual && row.actual != null) out.push({ label: "Outturn", value: fmtMW(row.actual), color: theme.actual });
+        if (series.actual && row.actual != null && row.forecast != null)
+          out.push({ label: "Forecast error", value: fmtMW(row.forecast - row.actual, true), emphasis: true });
+        return { title: fmtDayTime(Number(label)), rows: out };
+      }),
+    [series, theme],
+  );
 
   const downloadCsv = () => {
     if (!data) return;
-    const blob = new Blob([dayAheadCsv(data.forecast_points)], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(new Blob([dayAheadCsv(data.forecast_points)], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = `windsight_${data.delivery_date}_gate-${gate.replace(":", "")}.csv`;
@@ -41,118 +65,118 @@ export function DayAheadView({ meta, gate, gateLabel, date, onDateChange }: Prop
     URL.revokeObjectURL(url);
   };
 
+  const s = data?.summary;
+  const energyError = s?.forecast_mwh != null && s.actual_mwh ? ((s.forecast_mwh - s.actual_mwh) / s.actual_mwh) * 100 : null;
+  const adjustedBetter = s?.adjusted_metrics.mae != null && s.metrics.mae != null && s.adjusted_metrics.mae < s.metrics.mae;
+
   return (
     <div className="view">
-      <div className="toolbar">
-        <div className="date-nav" role="group" aria-label="Delivery day">
-          <button type="button" className="btn btn-icon" onClick={() => onDateChange(dates[idx - 1]!)} disabled={idx <= 0} aria-label="Previous day">
-            ‹
-          </button>
-          <select value={date} onChange={(e) => onDateChange(e.target.value)} aria-label="Select delivery day">
-            {dates.map((d) => (
-              <option key={d} value={d}>
-                Delivery {fmtLongDate(d)}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="btn btn-icon"
-            onClick={() => onDateChange(dates[idx + 1]!)}
-            disabled={idx < 0 || idx >= dates.length - 1}
-            aria-label="Next day"
-          >
-            ›
-          </button>
-        </div>
-        <div className="toolbar-right">
-          <Toggle label="Show outturn (hindsight)" checked={showActual} onChange={setShowActual} />
-          <Toggle label="Adjusted forecast (beta)" checked={showAdjusted} onChange={setShowAdjusted} />
-          <button type="button" className="btn btn-small" onClick={downloadCsv} disabled={!data}>
-            Download CSV
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Delivery day"
+        title={fmtLongDate(date)}
+        description={`Wind forecast available at the ${gate} ${gateLabel} gate closure, compared with metered outturn.`}
+        actions={
+          <div className="date-nav" role="group" aria-label="Choose delivery day">
+            <button type="button" className="icon-btn" onClick={() => onDateChange(dates[idx - 1]!)} disabled={idx <= 0} aria-label="Previous day">
+              <ChevronLeft size={16} aria-hidden="true" />
+            </button>
+            <select className="select" value={date} onChange={(e) => onDateChange(e.target.value)} aria-label="Delivery day">
+              {dates.map((d) => (
+                <option key={d} value={d}>
+                  {fmtLongDate(d)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => onDateChange(dates[idx + 1]!)}
+              disabled={idx < 0 || idx >= dates.length - 1}
+              aria-label="Next day"
+            >
+              <ChevronRight size={16} aria-hidden="true" />
+            </button>
+          </div>
+        }
+      />
 
-      {error && <ErrorBox error={error} onRetry={() => refetch()} />}
-      {isPending && !error && <Loading label="Loading delivery day…" />}
+      {error && <ErrorState error={error} onRetry={() => refetch()} />}
+      {isPending && !error && <LoadingPage />}
 
       {data && s && (
         <>
-          <div className="decision-strip" aria-live="polite">
-            <div>
-              <span className="strip-label">Decision deadline</span>
-              <strong>{fmtDayTime(data.decision_cutoff)}</strong>
-              <span className="strip-muted">{gateLabel}</span>
-            </div>
-            <div>
-              <span className="strip-label">Latest forecast available</span>
-              <strong>{data.forecast_publish_time ? `Published ${fmtDayTime(data.forecast_publish_time)}` : "None"}</strong>
-              <span className="strip-muted">Elexon WINDFOR</span>
-            </div>
-            <div>
-              <span className="strip-label">Lead time to delivery</span>
-              <strong>
-                {fmtHours(data.lead_time_range_h[0])} – {fmtHours(data.lead_time_range_h[1])}
-              </strong>
-              <span className="strip-muted">Delivery {fmtShortDate(data.delivery_date)}, 00:00–24:00 UK</span>
-            </div>
-          </div>
+          <Panel>
+            <DecisionTimeline
+              publishes={data.decision_day_publishes}
+              cutoff={data.decision_cutoff}
+              usedPublish={data.forecast_publish_time}
+              gateLabel={gateLabel}
+              leadRange={data.lead_time_range_h}
+            />
+          </Panel>
 
-          <div className={`kpi-grid ${isFetching ? "is-refreshing" : ""}`}>
-            <Kpi
-              label="Wind forecast for the day"
-              value={fmtGWh(s.forecast_mwh)}
-              sub={`Peak ${fmtGW(s.peak_forecast_mw, false, 1)} · trough ${fmtGW(s.min_forecast_mw, false, 1)}`}
-              tone="accent"
+          <StatGroup busy={isFetching}>
+            <Stat
+              label="Forecast energy"
+              value={gwh(s.forecast_mwh)}
+              unit="GWh"
+              detail={`Peak ${fmtNumber((s.peak_forecast_mw ?? 0) / 1000, 1)} GW, low ${fmtNumber((s.min_forecast_mw ?? 0) / 1000, 1)} GW`}
             />
-            <Kpi
+            <Stat
               label="80% likely range"
-              value={`${s.low_mwh != null ? Math.round(s.low_mwh / 1000) : "–"}–${fmtGWh(s.high_mwh, 0)}`}
-              sub="Hourly P10–P90 from January errors"
+              value={`${s.low_mwh != null ? fmtNumber(s.low_mwh / 1000, 0) : "–"}–${s.high_mwh != null ? fmtNumber(s.high_mwh / 1000, 0) : "–"}`}
+              unit="GWh"
+              detail="Sum of hourly P10 and P90"
             />
-            <Kpi
-              label="Adjusted forecast (beta)"
-              value={fmtGWh(s.adjusted_mwh)}
-              sub={s.adjust_ratio != null ? `Forecast × ${s.adjust_ratio.toFixed(2)} (trailing 7 settled days)` : "–"}
+            <Stat
+              label="Adjusted forecast"
+              value={gwh(s.adjusted_mwh)}
+              unit="GWh"
+              detail={s.adjust_ratio != null ? `Forecast × ${s.adjust_ratio.toFixed(2)}, trailing 7 days` : undefined}
             />
-            {showActual ? (
-              <>
-                <Kpi
-                  label="Actual outturn"
-                  value={fmtGWh(s.actual_mwh)}
-                  sub={dayError != null ? `Forecast was ${dayError >= 0 ? "+" : ""}${fmtPct(dayError, 1)} vs actual` : "–"}
-                  tone={dayError != null && dayError > 10 ? "warn" : "neutral"}
-                />
-                <Kpi
-                  label="Hourly mean abs. error"
-                  value={fmtMW(s.metrics.mae)}
-                  sub={`Adjusted: ${fmtMW(s.adjusted_metrics.mae)}`}
-                  tone={
-                    s.adjusted_metrics.mae != null && s.metrics.mae != null && s.adjusted_metrics.mae < s.metrics.mae ? "good" : "neutral"
-                  }
-                />
-              </>
-            ) : (
-              <Kpi label="Outturn hidden" value="—" sub="Toggle 'Show outturn' to compare with actuals" />
-            )}
-          </div>
+            <Stat
+              label="Metered outturn"
+              value={gwh(s.actual_mwh)}
+              unit="GWh"
+              detail={energyError != null ? `Forecast ${energyError >= 0 ? "+" : ""}${energyError.toFixed(1)}% vs outturn` : undefined}
+            />
+            <Stat
+              label="Mean absolute error"
+              value={s.metrics.mae != null ? fmtNumber(s.metrics.mae) : "–"}
+              unit="MW"
+              detail={
+                <>
+                  Adjusted <span className={adjustedBetter ? "tone-positive" : ""}>{fmtMW(s.adjusted_metrics.mae)}</span>
+                </>
+              }
+            />
+          </StatGroup>
 
           <Panel
-            title="Wind generation: forecast at decision time vs outturn"
-            subtitle="National wind, MW. Times in UK local time."
+            title="Hourly wind generation"
+            description="National wind output in MW, UK local time"
             actions={
-              <div className="legend">
-                <LegendDot color={theme.forecast} label="Forecast at deadline" />
-                <LegendDot color={theme.band} label="80% likely range" area />
-                {showAdjusted && <LegendDot color={theme.adjusted} label="Adjusted forecast" dashed />}
-                {showActual && <LegendDot color={theme.actual} label="Actual outturn" />}
-              </div>
+              <>
+                <div className="series-toggles" role="group" aria-label="Chart series">
+                  <span className="legend-item legend-fixed">
+                    <span className="swatch swatch-line" style={{ borderTopColor: theme.forecast }} aria-hidden="true" />
+                    Forecast
+                  </span>
+                  <SeriesToggle color={theme.band} variant="area" label="80% range" active={series.band} onToggle={() => toggle("band")} />
+                  <SeriesToggle color={theme.adjusted} variant="dash" label="Adjusted" active={series.adjusted} onToggle={() => toggle("adjusted")} />
+                  <SeriesToggle color={theme.actual} label="Outturn" active={series.actual} onToggle={() => toggle("actual")} />
+                </div>
+                <button type="button" className="btn" onClick={downloadCsv}>
+                  <Download size={14} aria-hidden="true" />
+                  CSV
+                </button>
+              </>
             }
+            footer="Only the latest forecast published before the deadline is used. The 80% range comes from forecast errors on the other January delivery days."
           >
-            <div className="chart chart-tall">
+            <div className={`chart chart-lg ${isFetching ? "is-busy" : ""}`}>
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={rows} margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
+                <ComposedChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
                   <CartesianGrid stroke={theme.grid} vertical={false} />
                   <XAxis
                     dataKey="t"
@@ -161,108 +185,34 @@ export function DayAheadView({ meta, gate, gateLabel, date, onDateChange }: Prop
                     domain={["dataMin", "dataMax"]}
                     ticks={ticks}
                     tickFormatter={(t: number) => fmtTime(t)}
-                    stroke={theme.axis}
-                    fontSize={12}
+                    {...axisProps(theme)}
+                    dy={6}
                   />
-                  <YAxis tickFormatter={(v: number) => `${(v / 1000).toFixed(0)} GW`} stroke={theme.axis} fontSize={12} width={56} />
-                  <Tooltip
-                    content={(p) => (
-                      <DayTooltip {...(p as unknown as TipProps)} theme={theme} showActual={showActual} showAdjusted={showAdjusted} />
-                    )}
-                  />
-                  <Area
-                    dataKey="band"
-                    stroke="none"
-                    fill={theme.band}
-                    fillOpacity={0.45}
-                    connectNulls
-                    isAnimationActive={false}
-                    name="80% range"
-                  />
-                  <Line dataKey="forecast" stroke={theme.forecast} strokeWidth={2.5} dot={false} connectNulls isAnimationActive={false} />
-                  {showAdjusted && (
+                  <YAxis ticks={yTicks} domain={[0, yTicks[yTicks.length - 1] ?? "auto"]} tickFormatter={gwLabel} {...axisProps(theme)} width={56} />
+                  <Tooltip content={renderTooltip} cursor={{ stroke: theme.cursor, strokeWidth: 1 }} />
+                  {series.band && (
+                    <Area dataKey="band" stroke="none" fill={theme.band} fillOpacity={theme.bandOpacity} connectNulls isAnimationActive={false} />
+                  )}
+                  <Line dataKey="forecast" stroke={theme.forecast} strokeWidth={2.25} dot={false} connectNulls isAnimationActive={false} />
+                  {series.adjusted && (
                     <Line
                       dataKey="adjusted"
                       stroke={theme.adjusted}
                       strokeWidth={2}
-                      strokeDasharray="6 4"
+                      strokeDasharray="5 4"
                       dot={false}
                       connectNulls
                       isAnimationActive={false}
                     />
                   )}
-                  {showActual && (
-                    <Line dataKey="actual" stroke={theme.actual} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
+                  {series.actual && (
+                    <Line dataKey="actual" stroke={theme.actual} strokeWidth={1.75} dot={false} connectNulls isAnimationActive={false} />
                   )}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
-            <p className="footnote">
-              The forecast shown is the latest Elexon WINDFOR publish available at the deadline. Nothing published after it is
-              used. The shaded range comes from January forecast errors on the other delivery days, so it reflects how far
-              outturn typically lands from this forecast.
-            </p>
           </Panel>
         </>
-      )}
-    </div>
-  );
-}
-
-interface TipProps {
-  active?: boolean;
-  payload?: ReadonlyArray<{ payload: DayChartRow }>;
-  label?: number;
-}
-
-function DayTooltip({
-  active,
-  payload,
-  label,
-  theme,
-  showActual,
-  showAdjusted,
-}: TipProps & { theme: ChartTheme; showActual: boolean; showAdjusted: boolean }) {
-  if (!active || !payload?.length || label === undefined) return null;
-  const raw = payload[0]!.payload;
-  const row = { ...raw, actual: showActual ? raw.actual : null, adjusted: showAdjusted ? raw.adjusted : null };
-  if (row.forecast == null && row.actual == null) return null;
-  return (
-    <div className="tooltip" style={{ background: theme.tooltipBg, borderColor: theme.tooltipBorder }}>
-      <div className="tooltip-title">{fmtDayTime(label)}</div>
-      {row.forecast != null && (
-        <div className="tooltip-row">
-          <span style={{ color: theme.forecast }}>Forecast</span>
-          <strong>{fmtMW(row.forecast)}</strong>
-        </div>
-      )}
-      {row.band && (
-        <div className="tooltip-row">
-          <span>80% range</span>
-          <strong>
-            {fmtMW(row.band[0])} – {fmtMW(row.band[1])}
-          </strong>
-        </div>
-      )}
-      {row.adjusted != null && (
-        <div className="tooltip-row">
-          <span style={{ color: theme.adjusted }}>Adjusted</span>
-          <strong>{fmtMW(row.adjusted)}</strong>
-        </div>
-      )}
-      {row.actual != null && (
-        <div className="tooltip-row">
-          <span>Actual</span>
-          <strong>{fmtMW(row.actual)}</strong>
-        </div>
-      )}
-      {row.actual != null && row.forecast != null && (
-        <div className="tooltip-row">
-          <span>Error (fcst − actual)</span>
-          <strong style={{ color: row.forecast - row.actual > 0 ? theme.over : theme.under }}>
-            {fmtMW(row.forecast - row.actual, true)}
-          </strong>
-        </div>
       )}
     </div>
   );

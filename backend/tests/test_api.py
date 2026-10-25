@@ -20,6 +20,12 @@ def test_day_ahead_contract(client) -> None:
     body = response.json()
     assert body["decision_cutoff"] == "2026-01-02T09:20:00Z"
     assert body["forecast_publish_time"] == "2026-01-02T07:30:00Z"
+    assert body["decision_day_publishes"] == [
+        "2026-01-02T02:30:00Z",
+        "2026-01-02T07:30:00Z",
+        "2026-01-02T09:30:00Z",
+        "2026-01-02T15:30:00Z",
+    ]
     assert len(body["forecast_points"]) == 24
     assert len(body["actual_points"]) == 48
     assert body["summary"]["metrics"]["n"] == 24

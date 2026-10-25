@@ -3,9 +3,10 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 
 import { useSeries } from "../api/queries";
 import type { Meta } from "../api/types";
-import { ErrorBox, Kpi, LegendDot, Loading, Panel } from "../components/ui";
-import { mergeSeries } from "../lib/chartData";
-import { addDays, fmtDay, fmtDayTime, fmtMW, fmtPct, fmtTime } from "../lib/format";
+import { axisProps, tooltipContent, type TooltipRow } from "../components/chart";
+import { ErrorState, LegendItem, LoadingPage, PageHeader, Panel, Stat, StatGroup } from "../components/ui";
+import { gwLabel, mergeSeries, niceTicks, type SeriesRow } from "../lib/chartData";
+import { addDays, fmtDay, fmtDayTime, fmtMW, fmtNumber, fmtPct, fmtShortDate, fmtTime } from "../lib/format";
 import { useChartTheme } from "../lib/theme";
 import { useDebounced } from "../lib/urlState";
 
@@ -30,64 +31,109 @@ export function ExplorerView({ meta }: { meta: Meta }) {
     return midnights.filter((_, i) => i % step === 0);
   }, [rows]);
 
+  const yTicks = useMemo(() => niceTicks(Math.max(0, ...rows.flatMap((r) => [r.actual ?? 0, r.forecast ?? 0]))), [rows]);
+
+  const renderTooltip = useMemo(
+    () =>
+      tooltipContent<SeriesRow>((row, label) => {
+        const out: TooltipRow[] = [];
+        if (row.forecast != null) out.push({ label: "Forecast", value: fmtMW(row.forecast), color: theme.forecast });
+        if (row.actual != null) out.push({ label: "Outturn", value: fmtMW(row.actual), color: theme.actual });
+        if (row.forecast != null && row.actual != null)
+          out.push({ label: "Forecast error", value: fmtMW(row.forecast - row.actual, true), emphasis: true });
+        return { title: fmtDayTime(Number(label)), rows: out };
+      }),
+    [theme],
+  );
+
   return (
     <div className="view">
-      <div className="toolbar">
-        <div className="field-row">
+      <PageHeader
+        eyebrow="Analysis"
+        title="Forecast explorer"
+        description="Compare outturn with the latest forecast that was at least a chosen number of hours old. Increase the horizon to see accuracy fall away."
+      />
+
+      <Panel>
+        <div className="controls">
           <label className="field">
-            <span>From</span>
-            <input type="date" value={startDate} min={minDate} max={maxDate} onChange={(e) => e.target.value && setStartDate(e.target.value)} />
+            <span className="field-label">From</span>
+            <input
+              className="select"
+              type="date"
+              value={startDate}
+              min={minDate}
+              max={maxDate}
+              onChange={(e) => e.target.value && setStartDate(e.target.value)}
+            />
           </label>
           <label className="field">
-            <span>To</span>
-            <input type="date" value={endDate} min={minDate} max={maxDate} onChange={(e) => e.target.value && setEndDate(e.target.value)} />
+            <span className="field-label">To</span>
+            <input
+              className="select"
+              type="date"
+              value={endDate}
+              min={minDate}
+              max={maxDate}
+              onChange={(e) => e.target.value && setEndDate(e.target.value)}
+            />
           </label>
-          <label className="field field-slider">
-            <span>
-              Forecast horizon: <strong>{horizon} h</strong>
+          <label className="field field-grow">
+            <span className="field-label">
+              Minimum forecast age <output className="field-value">{horizon} h</output>
             </span>
             <input
+              className="range"
               type="range"
               min={0}
               max={48}
               step={1}
               value={horizon}
               onChange={(e) => setHorizon(Number(e.target.value))}
-              aria-label="Forecast horizon in hours"
+              aria-valuetext={`${horizon} hours`}
             />
+            <span className="range-scale" aria-hidden="true">
+              <span>0 h</span>
+              <span>12 h</span>
+              <span>24 h</span>
+              <span>36 h</span>
+              <span>48 h</span>
+            </span>
           </label>
         </div>
-        <p className="toolbar-hint">
-          For each hour, the forecast shown is the latest one published at least {horizon} h earlier. Drag the slider to watch
-          accuracy degrade.
-        </p>
-      </div>
+        {!rangeValid && <p className="field-error">The start date must be on or before the end date.</p>}
+      </Panel>
 
-      {!rangeValid && <ErrorBox error={new Error("The start date must be on or before the end date.")} />}
-      {error && <ErrorBox error={error} onRetry={() => refetch()} />}
-      {isPending && rangeValid && !error && <Loading />}
+      {error && <ErrorState error={error} onRetry={() => refetch()} />}
+      {isPending && rangeValid && !error && <LoadingPage />}
 
       {data && (
         <>
-          <div className={`kpi-grid ${isFetching ? "is-refreshing" : ""}`}>
-            <Kpi label="Mean absolute error" value={fmtMW(data.metrics.mae)} sub={`${fmtPct(data.metrics.nmae_pct, 1)} of mean outturn`} tone="accent" />
-            <Kpi label="Bias" value={fmtMW(data.metrics.bias, true)} sub="Forecast − actual" />
-            <Kpi label="P90 absolute error" value={fmtMW(data.metrics.p90_abs_error)} />
-            <Kpi label="Hours compared" value={String(data.metrics.n)} sub={`Horizon ≥ ${data.horizon_h} h`} />
-          </div>
+          <StatGroup busy={isFetching}>
+            <Stat
+              label="Mean absolute error"
+              value={fmtNumber(data.metrics.mae)}
+              unit="MW"
+              detail={`${fmtPct(data.metrics.nmae_pct, 1)} of mean outturn`}
+            />
+            <Stat label="Bias" value={`${(data.metrics.bias ?? 0) > 0 ? "+" : ""}${fmtNumber(data.metrics.bias)}`} unit="MW" detail="Forecast minus outturn" />
+            <Stat label="P90 absolute error" value={fmtNumber(data.metrics.p90_abs_error)} unit="MW" detail="9 in 10 hours within" />
+            <Stat label="Hours compared" value={String(data.metrics.n)} detail={`${fmtShortDate(startDate)} to ${fmtShortDate(endDate)}`} />
+          </StatGroup>
+
           <Panel
-            title="Actual vs forecast generation"
-            subtitle={`${fmtDay(data.start)} to ${fmtDay(new Date(Date.parse(data.end) - 1).toISOString())} · MW`}
+            title="Outturn and forecast"
+            description={`${fmtDay(data.start)} to ${fmtDay(Date.parse(data.end) - 1)}, MW`}
             actions={
               <div className="legend">
-                <LegendDot color={theme.actual} label="Actual" />
-                <LegendDot color={theme.forecast} label={`Forecast (≥ ${data.horizon_h} h ahead)`} />
+                <LegendItem color={theme.actual} label="Outturn" />
+                <LegendItem color={theme.forecast} label={`Forecast, at least ${data.horizon_h} h old`} />
               </div>
             }
           >
-            <div className="chart chart-tall">
+            <div className={`chart chart-lg ${isFetching ? "is-busy" : ""}`}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
+                <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
                   <CartesianGrid stroke={theme.grid} vertical={false} />
                   <XAxis
                     dataKey="t"
@@ -96,16 +142,12 @@ export function ExplorerView({ meta }: { meta: Meta }) {
                     domain={["dataMin", "dataMax"]}
                     ticks={ticks}
                     tickFormatter={(t: number) => fmtDay(t)}
-                    stroke={theme.axis}
-                    fontSize={12}
+                    {...axisProps(theme)}
+                    dy={6}
                   />
-                  <YAxis tickFormatter={(v: number) => `${(v / 1000).toFixed(0)} GW`} stroke={theme.axis} fontSize={12} width={56} />
-                  <Tooltip
-                    contentStyle={{ background: theme.tooltipBg, borderColor: theme.tooltipBorder, borderRadius: 8 }}
-                    labelFormatter={(t) => fmtDayTime(Number(t))}
-                    formatter={(v, name) => [fmtMW(Number(v)), name === "actual" ? "Actual" : "Forecast"]}
-                  />
-                  <Line dataKey="actual" stroke={theme.actual} strokeWidth={1.8} dot={false} connectNulls isAnimationActive={false} />
+                  <YAxis ticks={yTicks} domain={[0, yTicks[yTicks.length - 1] ?? "auto"]} tickFormatter={gwLabel} {...axisProps(theme)} width={56} />
+                  <Tooltip content={renderTooltip} cursor={{ stroke: theme.cursor }} />
+                  <Line dataKey="actual" stroke={theme.actual} strokeWidth={1.5} dot={false} connectNulls isAnimationActive={false} />
                   <Line dataKey="forecast" stroke={theme.forecast} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>

@@ -1,2 +1,8 @@
-# Vercel installs Python dependencies for api/index.py from this file.
--r backend/requirements.txt
+# Python dependencies for the Vercel function (api/index.py).
+# Keep versions in sync with backend/requirements.txt (uvicorn is not needed on Vercel).
+fastapi==0.162.0
+pandas==3.1.0
+numpy==2.5.4
+httpx==0.28.1
+pydantic==2.14.1
+pydantic-settings==2.16.1

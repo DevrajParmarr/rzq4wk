@@ -9,9 +9,10 @@ It uses only Elexon BMRS data: national wind outturn (`FUELHH`, `fuelType=WIND`)
 
 | | |
 |---|---|
-| **Live app** | _add the Vercel/Heroku URL here after deploying (see [Deployment](#deployment))_ |
+| **Live app** | https://rzq4wk.vercel.app |
 | **Video walkthrough** | _add the unlisted YouTube link here_ |
-| **API docs** | `<app-url>/api/docs` (OpenAPI / Swagger UI) |
+| **API docs** | https://rzq4wk.vercel.app/api/docs (OpenAPI / Swagger UI) |
+| **Source** | https://github.com/DevrajParmarr/rzq4wk |
 
 ---
 
@@ -95,7 +96,7 @@ To analyse a different month, set `WINDSIGHT_DECISION_START` and `WINDSIGHT_DECI
 
 The production artefact is one Docker image. It contains FastAPI serving the JSON API at `/api/v1` and the built React app at `/`.
 
-**Vercel** (serverless). The config is in `vercel.json` and `api/index.py`. Vercel builds the React app as static files and runs FastAPI as a Python function for `/api/*`.
+**Vercel** (serverless, used for the live app). The config is in `vercel.json` and `api/index.py`. Vercel builds the React app as static files and runs FastAPI as a Python function for `/api/*`. Vercel CLI 47.2.2 or newer is required.
 
 ```bash
 npm i -g vercel
@@ -148,7 +149,7 @@ git push heroku main
 ├── docker-compose.yml           Local one-command run
 ├── heroku.yml                   Heroku container deploy
 ├── vercel.json                  Vercel build and routing
-├── requirements.txt             Points Vercel at backend/requirements.txt
+├── requirements.txt             Python dependencies for the Vercel function
 ├── .github/workflows/ci.yml     CI: lint, tests, typecheck, build, Docker smoke test
 └── docs/
     ├── ARCHITECTURE.md          Design, decisions and trade-offs, testing, next steps

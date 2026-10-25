@@ -1,0 +1,2 @@
+# Vercel installs Python dependencies for api/index.py from this file.
+-r backend/requirements.txt

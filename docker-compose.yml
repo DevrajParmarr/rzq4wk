@@ -1,0 +1,10 @@
+services:
+  windsight:
+    build: .
+    image: windsight:latest
+    ports:
+      - "8000:8000"
+    environment:
+      # Override any setting from backend/app/config.py with WINDSIGHT_* variables.
+      WINDSIGHT_DEFAULT_GATE: "09:20"
+    restart: unless-stopped

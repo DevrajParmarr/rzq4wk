@@ -6,7 +6,7 @@ import type { Meta } from "../api/types";
 import { axisProps, tooltipContent, type TooltipRow } from "../components/chart";
 import { ErrorState, LegendItem, LoadingPage, PageHeader, Panel, Stat, StatGroup } from "../components/ui";
 import { gwLabel, mergeSeries, niceTicks, type SeriesRow } from "../lib/chartData";
-import { addDays, fmtDay, fmtDayTime, fmtMW, fmtNumber, fmtPct, fmtShortDate, fmtTime } from "../lib/format";
+import { addDays, fmtDay, fmtDayTime, fmtMW, fmtNumber, fmtPct, fmtTime } from "../lib/format";
 import { useChartTheme } from "../lib/theme";
 import { useDebounced } from "../lib/urlState";
 
@@ -38,7 +38,7 @@ export function ExplorerView({ meta }: { meta: Meta }) {
       tooltipContent<SeriesRow>((row, label) => {
         const out: TooltipRow[] = [];
         if (row.forecast != null) out.push({ label: "Forecast", value: fmtMW(row.forecast), color: theme.forecast });
-        if (row.actual != null) out.push({ label: "Outturn", value: fmtMW(row.actual), color: theme.actual });
+        if (row.actual != null) out.push({ label: "Actual", value: fmtMW(row.actual), color: theme.actual });
         if (row.forecast != null && row.actual != null)
           out.push({ label: "Forecast error", value: fmtMW(row.forecast - row.actual, true), emphasis: true });
         return { title: fmtDayTime(Number(label)), rows: out };
@@ -51,7 +51,7 @@ export function ExplorerView({ meta }: { meta: Meta }) {
       <PageHeader
         eyebrow="Analysis"
         title="Forecast explorer"
-        description="Compare outturn with the latest forecast that was at least a chosen number of hours old. Increase the horizon to see accuracy fall away."
+        description="Pick a period and how far ahead the forecast was made. Accuracy falls as the horizon grows."
       />
 
       <Panel>
@@ -80,7 +80,7 @@ export function ExplorerView({ meta }: { meta: Meta }) {
           </label>
           <label className="field field-grow">
             <span className="field-label">
-              Minimum forecast age <output className="field-value">{horizon} h</output>
+              Forecast made at least <output className="field-value">{horizon} h ahead</output>
             </span>
             <input
               className="range"
@@ -111,22 +111,21 @@ export function ExplorerView({ meta }: { meta: Meta }) {
         <>
           <StatGroup busy={isFetching}>
             <Stat
-              label="Mean absolute error"
+              label="Average hourly miss"
               value={fmtNumber(data.metrics.mae)}
               unit="MW"
-              detail={`${fmtPct(data.metrics.nmae_pct, 1)} of mean outturn`}
+              detail={`${fmtPct(data.metrics.nmae_pct, 1)} of average output`}
             />
-            <Stat label="Bias" value={`${(data.metrics.bias ?? 0) > 0 ? "+" : ""}${fmtNumber(data.metrics.bias)}`} unit="MW" detail="Forecast minus outturn" />
+            <Stat label="Bias" value={`${(data.metrics.bias ?? 0) > 0 ? "+" : ""}${fmtNumber(data.metrics.bias)}`} unit="MW" detail="Forecast minus actual" />
             <Stat label="P90 absolute error" value={fmtNumber(data.metrics.p90_abs_error)} unit="MW" detail="9 in 10 hours within" />
-            <Stat label="Hours compared" value={String(data.metrics.n)} detail={`${fmtShortDate(startDate)} to ${fmtShortDate(endDate)}`} />
           </StatGroup>
 
           <Panel
-            title="Outturn and forecast"
-            description={`${fmtDay(data.start)} to ${fmtDay(Date.parse(data.end) - 1)}, MW`}
+            title="Actual vs forecast wind"
+            description={`${fmtDay(data.start)} to ${fmtDay(Date.parse(data.end) - 1)} · ${data.metrics.n} hours · MW`}
             actions={
               <div className="legend">
-                <LegendItem color={theme.actual} label="Outturn" />
+                <LegendItem color={theme.actual} label="Actual" />
                 <LegendItem color={theme.forecast} label={`Forecast, at least ${data.horizon_h} h old`} />
               </div>
             }

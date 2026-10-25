@@ -35,12 +35,12 @@ logger = logging.getLogger("windsight")
 GATE_PRESETS = [
     GatePreset(
         time="09:20",
-        label="EPEX SPOT GB day-ahead auction (09:20)",
+        label="EPEX SPOT",
         description="Gate closure of the EPEX SPOT GB hourly day-ahead auction, UK time.",
     ),
     GatePreset(
         time="09:50",
-        label="Nord Pool N2EX GB day-ahead auction (09:50)",
+        label="Nord Pool N2EX",
         description="Gate closure of the Nord Pool N2EX GB day-ahead auction, UK time.",
     ),
 ]

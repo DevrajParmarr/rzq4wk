@@ -177,3 +177,55 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
     </div>
   );
 }
+
+/** Compact single-choice switcher (used to swap related charts in one panel). */
+export function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+  label: string;
+}) {
+  return (
+    <div className="segmented" role="radiogroup" aria-label={label}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          className={value === o.value ? "is-active" : ""}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Collapsible section for supporting detail, closed by default. */
+export function Disclosure({
+  title,
+  summary,
+  children,
+}: {
+  title: string;
+  summary?: string;
+  children: ReactNode;
+}) {
+  return (
+    <details className="disclosure">
+      <summary>
+        <span className="disclosure-title">{title}</span>
+        {summary && <span className="disclosure-summary">{summary}</span>}
+        <span className="disclosure-chevron" aria-hidden="true" />
+      </summary>
+      <div className="disclosure-body">{children}</div>
+    </details>
+  );
+}

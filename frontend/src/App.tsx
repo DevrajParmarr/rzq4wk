@@ -34,7 +34,7 @@ export default function App() {
   const date = meta.data?.delivery_dates.includes(dateParam) ? dateParam : defaultDate;
   const preset = meta.data?.gate_presets.find((p) => p.time === gate);
   const showCustom = customOpen || !preset;
-  const gateLabel = preset ? preset.label.replace(/\s*\(\d\d:\d\d\)$/, "") : "Custom deadline";
+  const gateLabel = preset ? preset.label : "Custom deadline";
 
   const activeTab = useMemo(() => (TABS.some((t) => t.id === tab) ? tab : "day"), [tab]);
 
@@ -95,7 +95,7 @@ export default function App() {
             >
               {meta.data?.gate_presets.map((p) => (
                 <option key={p.time} value={p.time}>
-                  {p.label}
+                  {p.label} · {p.time}
                 </option>
               ))}
               <option value={CUSTOM}>Custom time</option>
